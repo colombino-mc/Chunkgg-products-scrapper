@@ -1,249 +1,63 @@
-<div align="center">
+# ScrapyGIT
 
-# 🕷️ Scappy - Веб-скрапер для Chunk.gg
+A Scrapy project that crawls [chunk.gg](https://chunk.gg) for Minecraft Marketplace product data and exports rich CSV snapshots. A Streamlit dashboard (`app.py`) is included for quick analysis of the collected dataset.
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
-[![Scrapy](https://img.shields.io/badge/Scrapy-2.13.3-green.svg)](https://scrapy.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+## How the Crawler Works
+1. **Category scheduling:** By default the spider visits Mashups ? Add-Ons ? Worlds ? Textures ? Skins. You can override the order or select a subset with `-a categories=mashups,skins`.
+2. **Listing crawl:** For each category, it paginates using chunk.gg�s query parameters (`?page=`) and queues every product card (`/@creator/product`). Pagination stops when the specified `max_pages` is reached or no new product URLs are discovered.
+3. **Product parsing:** Each product page is parsed for:
+   - visible badges (skin counts, player ranges)
+   - JSON-LD and rating cards for price/rating metadata
+   - Product Details card for minimum version & launch dates
+   - Changelog and raw HTML sections for UUID, gallery, tags
+   - Trailer widgets and YouTube stats when present
 
-**Мощный веб-скрапер для извлечения данных о продуктах Minecraft с маркетплейса Chunk.gg**
+## Repository Structure
+- `chunkgg/`
+  - `chunkgg/spiders/marketplace.py` � spider logic and helpers
+  - `chunkgg/items.py` � item schema consumed by the feed exporters
+  - `products.csv` / `products_all.csv` / `products_all.jl` � exported data files (regenerated on crawl)
+- `app.py` � Streamlit dashboard that consumes `products.csv`
+- `requirements.txt` � Scrapy dependency pin (2.13.3)
 
-[🚀 Быстрый старт](#-быстрый-старт) • [📋 Возможности](#-возможности) • [📊 Примеры](#-примеры) • [🛠️ Установка](#️-установка)
-
-</div>
-
----
-
-## 📋 Описание
-
-**Scappy** — это высокопроизводительный веб-скрапер, построенный на базе фреймворка Scrapy, специально разработанный для сбора данных о продуктах Minecraft с популярного маркетплейса [chunk.gg](https://chunk.gg).
-
-### 🎯 Что собираем:
-- 🏷️ **Названия продуктов** и создателей
-- 💰 **Категории и цены** в Minecoins  
-- ⭐ **Рейтинги и отзывы** пользователей
-- 📅 **Даты запуска** и требования к версии
-- 🏷️ **Теги продуктов** и метаданные
-
----
-
-## ✨ Возможности
-
-<table>
-<tr>
-<td width="50%">
-
-### 🚀 Производительность
-- ⚡ **Асинхронный краулинг** с высокой скоростью
-- 🎯 **Умное управление** запросами
-- 📊 **Автоматическое регулирование** нагрузки
-
-</td>
-<td width="50%">
-
-### 🛡️ Надежность  
-- 🤖 **Соблюдение robots.txt**
-- ⏱️ **Вежливые задержки** между запросами
-- 🔄 **Автоматические повторы** при ошибках
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 📈 Масштабируемость
-- 🌐 **Множественные категории** продуктов
-- 📁 **Гибкая структура** данных
-- 💾 **Экспорт в CSV** формат
-
-</td>
-<td width="50%">
-
-### 🎮 Категории
-- 🆕 Новинки
-- 🔥 Трендовые  
-- ⭐ Популярные
-- 🔧 Аддоны
-- 🌍 Миры
-- 🎨 Машапы
-- 🖼️ Текстуры
-- 👤 Скины
-
-</td>
-</tr>
-</table>
-
----
-
-## 🚀 Быстрый старт
-
-### 1️⃣ Клонирование репозитория
+## Setup
 ```bash
-git clone https://github.com/yourusername/scappy.git
-cd scappy
-```
-
-### 2️⃣ Установка зависимостей
-```bash
+python -m venv venv
+venv\Scripts\activate            # Windows PowerShell
 pip install -r requirements.txt
 ```
 
-### 3️⃣ Запуск скрапера
+## Running the Spider
 ```bash
 cd chunkgg
-scrapy crawl chunk_products
-```
+# Full crawl (all categories) with default ordering
+..\venv\Scripts\python -m scrapy crawl chunk_marketplace -O products.csv
 
-### 4️⃣ Получение результатов
+# Limit to specific categories and first 10 pages in each
+..\venv\Scripts\python -m scrapy crawl chunk_marketplace \
+    -a categories=mashups,addons \
+    -a max_pages=10 \
+    -O chunkgg_mashups_addons.csv
+```
+The `-O` option overwrites the target CSV with UTF-8 encoded output. Scrapy will also emit a JSON Lines file (`products_all.jl`) if configured in `settings.py`.
+
+## Output Fields
+Every row in `products.csv` contains:
+- Identity: `product_url`, `slug`, `category`, `creator`, `uuid`
+- Description: summary text, tag list, gallery URLs, changelog (if published)
+- Pricing: Minecoins, USD, EUR conversions, free flag
+- Ratings: `rating_value`, `rating_count`, `rating_out_of`, `rating_breakdown` (JSON list of per-star stats)
+- Timeline: launch date/time, last update date/time, minimum supported game version
+- Extras: badge-derived `skin_count`, `player_range`, trailer presence + YouTube views/likes
+
+## Streamlit Dashboard
+After crawling, launch the dashboard to explore the dataset interactively:
 ```bash
-# Данные сохраняются в products.csv
-head -5 products.csv
+streamlit run app.py
 ```
+The app reads `chunkgg/products.csv`, normalises columns, and exposes filters by creator, tags, and currency selection.
 
----
-
-## 📊 Примеры
-
-### 📈 Статистика сбора данных
-```
-📊 Статистика скрапинга:
-┌─────────────────┬─────────┐
-│ Категория       │ Количество │
-├─────────────────┼─────────┤
-│ 🆕 Новинки      │    245   │
-│ 🔥 Трендовые    │    189   │
-│ ⭐ Популярные   │    312   │
-│ 🔧 Аддоны       │    156   │
-│ 🌍 Миры         │    98    │
-│ 🎨 Машапы       │    67    │
-│ 🖼️ Текстуры     │    134   │
-│ 👤 Скины        │    89    │
-└─────────────────┴─────────┘
-📈 Всего продуктов: 1,290
-```
-
-### 📋 Структура данных
-```csv
-url,title,creator,category,price_minecoins,rating_value,rating_count,launched,last_updated,min_version,uid,tags
-https://chunk.gg/@creator/amazing-addon,Amazing Addon,Creator Name,Minecraft Addon Add-On,830,4.5,1234,2024-01-15,2024-02-01,1.20.0,12345678-1234-1234-1234-123456789012,"adventure,multiplayer,fun"
-```
-
----
-
-## 🛠️ Установка
-
-### Требования
-- 🐍 **Python 3.8+**
-- 📦 **Scrapy 2.13.3**
-- 🌐 **Интернет-соединение**
-
-### Пошаговая установка
-
-<details>
-<summary>🔽 Развернуть инструкции</summary>
-
-#### Windows
-```powershell
-# Создание виртуального окружения
-python -m venv venv
-venv\Scripts\activate
-
-# Установка зависимостей
-pip install -r requirements.txt
-```
-
-#### Linux/macOS
-```bash
-# Создание виртуального окружения
-python3 -m venv venv
-source venv/bin/activate
-
-# Установка зависимостей
-pip install -r requirements.txt
-```
-
-</details>
-
----
-
-## 📁 Структура проекта
-
-```
-📦 scappy/
-├── 📁 chunkgg/                    # Основной проект Scrapy
-│   ├── 📁 chunkgg/
-│   │   ├── 📁 spiders/
-│   │   │   └── 🕷️ chunk_products.py    # Главный паук
-│   │   ├── 📄 items.py                 # Модели данных
-│   │   ├── ⚙️ settings.py              # Конфигурация
-│   │   └── 🔄 pipelines.py             # Обработка данных
-│   ├── 📊 products.csv                 # Результат скрапинга
-│   └── 📋 scrapy.cfg                   # Конфиг проекта
-├── 📄 requirements.txt                 # Зависимости
-├── 📖 README.md                        # Документация
-└── 🚫 .gitignore                       # Игнорируемые файлы
-```
-
----
-
-## 🎛️ Конфигурация
-
-### Настройки производительности
-```python
-# settings.py
-CONCURRENT_REQUESTS_PER_DOMAIN = 1
-DOWNLOAD_DELAY = 0.75
-AUTOTHROTTLE_ENABLED = True
-```
-
-### Пользовательские заголовки
-```python
-DEFAULT_REQUEST_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; ChunkResearchBot/1.0)"
-}
-```
-
----
-
-## 📈 Результаты
-
-### 📊 Собранные поля данных:
-- 🌐 **url** - Ссылка на продукт
-- 🏷️ **title** - Название продукта  
-- 👤 **creator** - Создатель
-- 📂 **category** - Категория
-- 💰 **price_minecoins** - Цена в Minecoins
-- ⭐ **rating_value** - Средний рейтинг
-- 📊 **rating_count** - Количество оценок
-- 📅 **launched** - Дата запуска
-- 🔄 **last_updated** - Последнее обновление
-- 🎮 **min_version** - Минимальная версия
-- 🆔 **uid** - Уникальный идентификатор
-- 🏷️ **tags** - Теги продукта
-
----
-
-## 🤝 Вклад в проект
-
-Мы приветствуем вклад в развитие проекта! 
-
-1. 🍴 Форкните репозиторий
-2. 🌿 Создайте ветку для новой функции
-3. 💾 Сделайте коммит изменений
-4. 📤 Отправьте Pull Request
-
----
-
-## 📄 Лицензия
-
-Этот проект распространяется под лицензией MIT. См. файл [LICENSE](LICENSE) для подробностей.
-
----
-
-<div align="center">
-
-**Сделано с ❤️ для сообщества Minecraft**
-
-[⬆️ Наверх](#-scappy---веб-скрапер-для-chunkgg)
-
-</div>
+## Notes
+- chunk.gg does not expose download counts in static HTML; the scraper leaves `downloads` empty.
+- Respect chunk.gg�s robots.txt and throttle guidelines; the spider defaults to 0.4s delay and obeys robots.txt.
+- Regenerate the CSV (and rerun Streamlit) whenever you need fresh Marketplace data.
